@@ -17,7 +17,6 @@
 
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
 const APP_CONFIG = {
-  // Paste your Apps Script Web App URL here (see Code.gs setup notes).
   APPS_URL: "https://script.google.com/macros/s/AKfycbxHYl7q0fGYroKHGkGGTC2O4QQDLD_8l-VItmeHzsO10Ve_G8nqok_3EWH92QOWUOAw5w/exec",
   SESSION_DAYS: 30
 };
@@ -60,7 +59,7 @@ function isOk(sel,cor){
 }
 function normQ(raw,fid){
   const a=Array.isArray(raw)?raw:(raw?.questions||raw?.data||[]);
-  if(!Array.isArray(a))return [];
+  if(!Array.isArray(a))return[];
   return a.filter(q=>q&&(q.q||q.question)&&Array.isArray(q.options)&&q.options.length).map((q,i)=>({
     q:q.q||q.question||'',
     options:q.options||[],
@@ -89,14 +88,7 @@ async function netFetch(url, opts){
   return fetch(url, opts);
 }
 
-/* ═══════════════ 4. AUTH ═══════════════
-   Offline-first session model (like Facebook/WhatsApp): once a
-   user logs in successfully online, a long-lived local session is
-   stored. Every later app launch — even fully offline — restores
-   that session straight into the app with no re-login. The server
-   is only contacted for: first login on a device, explicit logout,
-   or a genuinely expired session while online. Signup needs
-   connectivity because admin approval lives on the server. */
+/* ═══════════════ 4. AUTH ═══════════════ */
 const AUTH = {
   mode: 'login',
 
@@ -215,16 +207,13 @@ const AUTH = {
     const s=_load(LS.SES,null);
     if(!s) return false;
     const expired = Date.now()-s.at > 86400000*APP_CONFIG.SESSION_DAYS;
-    if(expired && S.online) return false; // stale + reachable → require fresh login
+    if(expired && S.online) return false;
     AUTH._enter(s.user, !S.online);
     return true;
   }
 };
 
-/* ═══════════════ 5. ADMIN PANEL ═══════════════
-   Separate login path, authenticates against ADMIN_USERNAME/
-   ADMIN_PASSWORD in Code.gs (not the Users sheet). Requires
-   connectivity — moderation actions shouldn't happen offline. */
+/* ═══════════════ 5. ADMIN PANEL ═══════════════ */
 const ADMIN = {
   creds: null,
 
@@ -559,7 +548,7 @@ const PSY = {
   }
 };
 
-/* ═══════════════ 9. REVIEW LISTS (bookmarks / flagged / wrong) ═══════════════ */
+/* ═══════════════ 9. REVIEW LISTS ═══════════════ */
 const REV = {
   _store(kind){ return kind==='bk'?S.bk : kind==='fl'?S.fl : S.wr; },
   _lsKey(kind){ return kind==='bk'?LS.BK : kind==='fl'?LS.FL : LS.WR; },
@@ -572,7 +561,7 @@ const REV = {
     else { arr.push(question); toast(kind==='bk'?'⭐ Bookmarked':'🚩 Flagged'); }
     _save(REV._lsKey(kind), arr);
     HOME.updateBadges();
-    return i===-1; // true if now active
+    return i===-1;
   },
   has(kind, uid){ return REV._store(kind).some(x=>x.uid===uid); },
 
@@ -688,7 +677,6 @@ const QUIZ = {
     if(!refs.length){ toast('No content configured yet'); return; }
     toast('⏳ Building today\'s challenge…');
     (async()=>{
-      const seedDate = today();
       const picks = shuf(refs).slice(0, Math.min(10, refs.length));
       const all = [];
       for(const ref of picks){
@@ -733,24 +721,27 @@ const QUIZ = {
     document.getElementById('fc-ctr').textContent = `${S.quiz.idx+1}/${S.quiz.qs.length}`;
     document.getElementById('fc-pf').style.width = `${((S.quiz.idx)/S.quiz.qs.length)*100}%`;
     document.getElementById('fc-qn').textContent = 'Q'+(S.quiz.idx+1);
-    document.getElementById('fc-qt').textContent = q.q;
+    // FIXED: was fc-qt, now fc-q (correct ID)
+    document.getElementById('fc-q').textContent = q.q;
 
     const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
     const gq = encodeURIComponent(q.q.slice(0,120));
+    // FIXED: use bk-on / fl-on classes (defined in CSS)
     document.getElementById('fc-acts').innerHTML = `
-      <button class="ib ${isStarred?'starred':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
-      <button class="ib ${isFlagged?'flagged':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
+      <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
+      <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
       <a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none">🔍</a>
     `;
 
     const ansIdx = S.quiz.ans[S.quiz.idx];
     const answered = ansIdx !== null;
     const optsEl = document.getElementById('fc-opts');
+    // FIXED: use 'eo' class instead of 'opt' so CSS styles apply
     optsEl.innerHTML = q.options.map((opt,i)=>{
-      let cls='opt';
+      let cls='eo';
       if(answered){
         cls += (i===Number(q.correct)||String(i)===String(q.correct)) ? ' shc' : (i===ansIdx ? ' bad2' : '');
-        if(i===ansIdx && isOk(ansIdx,q.correct)) cls = 'opt shc';
+        if(i===ansIdx && isOk(ansIdx,q.correct)) cls = 'eo shc';
       }
       return `<div class="${cls} ${answered?'locked':''}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}">
         <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
@@ -776,11 +767,6 @@ const QUIZ = {
     document.getElementById('fc-ok').textContent='✅ '+ok;
     document.getElementById('fc-bad').textContent='❌ '+bad;
     document.getElementById('fc-skip').textContent='⏭ '+skip;
-    const total=S.quiz.qs.length;
-    const gp = total ? (ok/total)*100 : 0, rp = total ? (bad/total)*100 : 0;
-    document.getElementById('rg').style.flex = gp;
-    document.getElementById('rr').style.flex = rp;
-    document.getElementById('rs').style.flex = Math.max(0, 100-gp-rp);
   },
   fcAnswer(i){
     if(S.quiz.ans[S.quiz.idx]!==null)return;
@@ -847,12 +833,11 @@ const QUIZ = {
     document.getElementById('ex-pf').style.width = `${(answered/S.quiz.qs.length)*100}%`;
   },
   submitExam(){
-    if(!S.quiz.active)return; // guard against double-submit
+    if(!S.quiz.active)return;
     const unanswered = S.quiz.ans.filter(a=>a===null).length;
     if(unanswered>0 && S.quiz.left>0 && !confirm(`${unanswered} question(s) unanswered. Submit anyway?`))return;
     QUIZ._stopTimer();
     S.quiz.active=false;
-    // reveal correctness on exam screen
     S.quiz.qs.forEach((q,qi)=>{
       document.querySelectorAll(`#eqc-${qi} .eo`).forEach((e,oi2)=>{
         e.style.pointerEvents='none';
@@ -867,14 +852,12 @@ const QUIZ = {
     QUIZ._showResults();
   },
 
-  /* ── RETRY ── */
   retryWrong(){
     const wrongIdx = S.quiz.qs.map((q,i)=>({q,i})).filter(({i})=>!isOk(S.quiz.ans[i], S.quiz.qs[i].correct));
     if(!wrongIdx.length){ toast('🎉 Nothing to retry — all correct!'); UI.go('home'); return; }
     QUIZ.startWith(wrongIdx.map(x=>x.q), 'flashcard', S.quiz.ch + ' (Retry)');
   },
 
-  /* ── RESULTS ── */
   _showResults(){
     document.getElementById('fc-wrap').style.display='none';
     document.getElementById('ex-wrap').style.display='none';
@@ -906,7 +889,7 @@ const QUIZ = {
         <div class="qm"><span class="qn mono">Q${i+1}</span><span class="ctag ${correctPick?'tg':'tr'}">${correctPick?'Correct':a===null?'Skipped':'Wrong'}</span></div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
         ${q.options.map((opt,oi)=>{
-          let cls='opt';
+          let cls='eo';
           if(isOk(oi,q.correct)) cls+=' shc';
           else if(oi===a) cls+=' bad2';
           return `<div class="${cls}"><div class="ok">${String.fromCharCode(65+oi)}</div><div>${esc(opt)}</div></div>`;
@@ -920,7 +903,7 @@ const QUIZ = {
   }
 };
 
-/* keyboard support during quizzes: arrows to navigate flashcards, ESC to quit */
+/* keyboard support */
 document.addEventListener('keydown', e=>{
   if(!S.quiz.active) return;
   if(document.getElementById('quiz-wrap').style.display==='none') return;
@@ -935,7 +918,7 @@ document.addEventListener('keydown', e=>{
   }
 });
 
-/* ═══════════════ 11a. PROGRESS TRACKING ═══════════════ */
+/* ═══════════════ 11a. PROGRESS ═══════════════ */
 const PROG = {
   track(correct){
     S.prog.total++;
@@ -945,7 +928,7 @@ const PROG = {
   },
   recordSession(sess){
     S.prog.sessions.unshift(sess);
-    S.prog.sessions = S.prog.sessions.slice(0,50); // cap history
+    S.prog.sessions = S.prog.sessions.slice(0,50);
     _save(LS.PROG, S.prog);
     HOME.render();
   },
@@ -958,7 +941,6 @@ const PROG = {
       <div class="sc"><div class="sv tb2">${wrong}</div><div class="sl">Wrong</div></div>
       <div class="sc"><div class="sv ta2">${pct}%</div><div class="sl">Accuracy</div></div>
     `;
-    // Per-chapter accuracy from session history
     const byChap = {};
     S.prog.sessions.forEach(s=>{
       const k=s.chapter||'Unknown';
@@ -978,6 +960,7 @@ const PROG = {
     }
   }
 };
+
 /* ═══════════════ 11b. STREAK ═══════════════ */
 const STREAK = {
   markToday(){
@@ -1016,7 +999,7 @@ const STREAK = {
   }
 };
 
-/* ═══════════════ 11c. HOME / DASHBOARD ═══════════════ */
+/* ═══════════════ 11c. HOME ═══════════════ */
 const HOME = {
   render(){
     const h=new Date().getHours();
@@ -1095,7 +1078,6 @@ const TT = {
     tick();
     TT._clockTimer=setInterval(tick,1000);
 
-    // Today's sessions
     const todayDay = new Date().getDay();
     const todaySessions = S.tt.sessions.filter(s=>s.day===todayDay).sort((a,b)=>a.start.localeCompare(b.start));
     const todayEl = document.getElementById('tt-today');
@@ -1107,7 +1089,6 @@ const TT = {
       </div>
     `).join('') : '<div class="empty"><div class="empty-i">📅</div><p>Nothing scheduled today</p></div>';
 
-    // Full week calendar grid
     const weekEl = document.getElementById('tt-week');
     const today = new Date().getDay();
     weekEl.innerHTML = `
@@ -1304,7 +1285,7 @@ const APP = {
   }
 };
 
-/* ── network status wiring ── */
+/* ── network status ── */
 window.addEventListener('online', ()=>{
   S.online=true;
   document.getElementById('offbar')?.classList.remove('show');
@@ -1316,7 +1297,6 @@ window.addEventListener('offline', ()=>{
   toast('📡 You are offline — cached data will be used');
 });
 
-/* ── login screen connectivity indicator ── */
 function _updateLoginNetStatus(){
   const dot=document.getElementById('ndot'), stat=document.getElementById('nstat');
   if(!dot||!stat)return;
@@ -1326,30 +1306,18 @@ function _updateLoginNetStatus(){
 window.addEventListener('online', _updateLoginNetStatus);
 window.addEventListener('offline', _updateLoginNetStatus);
 
-/* ── boot sequence ── */
 document.addEventListener('DOMContentLoaded', ()=>{
   if(_load(LS.THEME,'dark')==='light') document.body.classList.add('light');
   _updateLoginNetStatus();
   PWA.init();
-  // Offline-first: try to restore an existing session before anything else.
-  // This is what makes the app behave like Facebook/WhatsApp — already
-  // logged-in users go straight to the dashboard, online or offline.
   const restored = AUTH.restore();
   if(!restored){
-    // No usable session — show login screen (already visible by default).
+    // No usable session — show login screen
   }
   document.getElementById('lu')?.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('lp').focus(); });
   document.getElementById('lp')?.addEventListener('keydown', e=>{ if(e.key==='Enter') AUTH.login(); });
 });
 
-/* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════
-   index.html calls these via inline onclick="X.method()" attributes.
-   Top-level `const X = {...}` does NOT reliably attach X to `window`
-   in all execution contexts — this caused inline onclick handlers to
-   silently fail to find X (e.g. "ADMIN is not defined" at click-time)
-   even though typing X directly in the console worked fine. Explicitly
-   assigning each object to window guarantees inline onclick attributes
-   can always resolve them. */
 window.AUTH = AUTH;
 window.ADMIN = ADMIN;
 window.UI = UI;
